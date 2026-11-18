@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Создание заявки</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    :root {
+      --bg: var(--tg-theme-bg-color, #ffffff);
+      --text: var(--tg-theme-text-color, #222222);
+      --hint: var(--tg-theme-hint-color, #888888);
+      --secondary-bg: var(--tg-theme-secondary-bg-color, #f4f4f5);
+      --btn: var(--tg-theme-button-color, #2481cc);
+      --btn-text: var(--tg-theme-button-text-color, #ffffff);
+    }
+    * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+    body { margin: 0; padding: 16px; background: var(--bg); color: var(--text); padding-bottom: 80px; }
+    h2 { font-size: 18px; margin: 0 0 12px; }
+    .card { background: var(--secondary-bg); border-radius: 12px; padding: 12px; margin-bottom: 16px; }
+    label { display: block; font-size: 13px; color: var(--hint); margin-bottom: 6px; }
+    select, input[type="text"], textarea {
+      width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid rgba(128,128,128,0.25);
+      background: var(--bg); color: var(--text); font-size: 15px; outline: none;
+    }
+    .product-item {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 10px 0; border-bottom: 1px solid rgba(128,128,128,0.15);
+    }
+    .product-item:last-child { border-bottom: none; }
+    .product-info { flex: 1; padding-right: 10px; }
+    .product-name { font-weight: 500; font-size: 15px; }
+    .product-meta { font-size: 13px; color: var(--hint); margin-top: 2px; }
+    .counter { display: flex; align-items: center; gap: 8px; }
+    .counter button {
+      width: 32px; height: 32px; border-radius: 8px; border: none;
+      background: var(--btn); color: var(--btn-text); font-size: 18px; font-weight: bold; cursor: pointer;
+    }
+    .counter button.minus { background: rgba(128,128,128,0.2); color: var(--text); }
+    .counter span { min-width: 24px; text-align: center; font-weight: 600; font-size: 15px; }
+    .summary { font-weight: 600; font-size: 16px; text-align: right; margin-top: 8px; }
+  </style>
+</head>
+<body>
+
+  <h2>Новая заявка</h2>
+
+  <!-- Выбор контрагента -->
+  <div class="card">
+    <label for="client">Контрагент (торговая точка)</label>
+    <select id="client">
+      <option value="">-- Выберите клиента --</option>
+      <option value="ТОО Альфа Маркет">ТОО «Альфа Маркет» (ул. Абая, 14)</option>
+      <option value="ИП Садыков">ИП Садыков (Магазин «Береке»)</option>
+      <option value="ТОО Восток Трейд">ТОО «Восток Трейд» (Склад №2)</option>
+      <option value="Супермаркет Достык">Супермаркет «Достык»</option>
+    </select>
+  </div>
+
+  <!-- Поиск и каталог товаров -->
+  <div class="card">
+    <label for="search">Поиск товара</label>
+    <input type="text" id="search" placeholder="Введите название или артикул..." oninput="renderProducts()" />
+    <div id="product-list" style="margin-top: 10px;"></div>
+    <div class="summary" id="total-sum">Итого: 0 ₸</div>
+  </div>
+
+  <!-- Комментарий -->
+  <div class="card">
+    <label for="comment">Комментарий к заказу</label>
+    <textarea id="comment" rows="2" placeholder="Например: доставка до 14:00, оплата наличными"></textarea>
+  </div>
+
+  <script>
+    const tg = window.Telegram.WebApp;
+    tg.ready();
+    tg.expand(); // Разворачиваем на весь экран
+
+    // Тестовый справочник товаров (позже заменим на выгрузку из 1С)
+    const products = [
+      { id: "001", name: "Вода минеральная 1.5л (уп. 6 шт)", price: 1200, stock: 45 },
+      { id: "002", name: "Сок яблочный 1л", price: 650, stock: 120 },
+      { id: "003", name: "Масло подсолнечное 1л", price: 890, stock: 30 },
+      { id: "004", name: "Мука пшеничная в/с 2кг", price: 780, stock: 80 },
+      { id: "005", name: "Чай черный листовой 250г", price: 1450, stock: 18 }
+    ];
+
+    const cart = {}; // { id: quantity }
+
+    function renderProducts() {
+
+const query = document.getElementById("search").value.toLowerCase();
+      const container = document.getElementById("product-list");
+      container.innerHTML = "";
+
+      products
+        .filter(p => p.name.toLowerCase().includes(query) || p.id.includes(query))
+        .forEach(p => {
+          const qty = cart[p.id] || 0;
+          const row = document.createElement("div");
+          row.className = "product-item";
+          row.innerHTML = `
+            <div class="product-info">
+              <div class="product-name">${p.name}</div>
+              <div class="product-meta">Цена: ${p.price} ₸ • Остаток: ${p.stock} шт</div>
+            </div>
+            <div class="counter">
+              ${qty > 0 ? <button class="minus" onclick="changeQty('${p.id}', -1)">−</button><span>${qty}</span> : ""}
+              <button onclick="changeQty('${p.id}', 1)">+</button>
+            </div>
+          `;
+          container.appendChild(row);
+        });
+    }
+
+    function changeQty(id, delta) {
+      const next = (cart[id] || 0) + delta;
+      if (next <= 0) delete cart[id];
+      else cart[id] = next;
+      renderProducts();
+      updateTotal();
+    }
+
+    function updateTotal() {
+      let sum = 0;
+      let count = 0;
+      for (const [id, qty] of Object.entries(cart)) {
+        const product = products.find(p => p.id === id);
+        if (product) {
+          sum += product.price * qty;
+          count += qty;
+        }
+      }
+      document.getElementById("total-sum").innerText = Итого: ${sum.toLocaleString()} ₸;
+
+      if (count > 0) {
+        tg.MainButton.setText(`Оформить заявку (${sum.toLocaleString()} ₸)`);
+        tg.MainButton.show();
+      } else {
+        tg.MainButton.hide();
+      }
+    }
+
+    // Обработка нажатия на нижнюю кнопку Telegram
+    tg.MainButton.onClick(() => {
+      const client = document.getElementById("client").value;
+      if (!client) {
+        tg.showAlert("Пожалуйста, выберите контрагента!");
+        return;
+      }
+
+      const items = Object.entries(cart).map(([id, qty]) => {
+        const p = products.find(item => item.id === id);
+        return { id: p.id, name: p.name, price: p.price, qty, total: p.price * qty };
+      });
+
+      const orderPayload = {
+        client,
+        comment: document.getElementById("comment").value.trim(),
+        items,
+        totalSum: items.reduce((acc, i) => acc + i.total, 0)
+      };
+
+      // Отправляем данные обратно в бота
+      tg.sendData(JSON.stringify(orderPayload));
+    });
+
+    renderProducts();
+  </script>
+</body>
+</html>
